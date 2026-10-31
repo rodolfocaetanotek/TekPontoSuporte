@@ -256,7 +256,9 @@ for (const [tabela, coluna, tipo] of [['avaliacoes', 'origem', 'TEXT'], ['avalia
   // Cadastro de gestão do técnico (o resto vem do Digisac).
   ['tecnicos', 'na_equipe', 'INTEGER NOT NULL DEFAULT 0'], ['tecnicos', 'matricula', 'TEXT'],
   ['tecnicos', 'data_admissao', 'TEXT'], ['tecnicos', 'funcao', 'TEXT'], ['tecnicos', 'jornada_min', 'INTEGER'],
-  ['tecnicos', 'meta_padrao', 'REAL'], ['tecnicos', 'goto_agente', 'TEXT'], ['tecnicos', 'situacao', "TEXT NOT NULL DEFAULT 'Ativo'"]]) {
+  ['tecnicos', 'meta_padrao', 'REAL'], ['tecnicos', 'goto_agente', 'TEXT'], ['tecnicos', 'situacao', "TEXT NOT NULL DEFAULT 'Ativo'"],
+  // Acesso dos técnicos (como na Base Bruno): senha provisória obriga a troca no 1º acesso.
+  ['usuarios', 'deve_trocar_senha', 'INTEGER NOT NULL DEFAULT 0'], ['usuarios', 'ultimo_acesso', 'TEXT']]) {
   const existe = db.prepare(`PRAGMA table_info(${tabela})`).all().some((c) => c.name === coluna);
   if (!existe) db.exec(`ALTER TABLE ${tabela} ADD COLUMN ${coluna} ${tipo}`);
 }

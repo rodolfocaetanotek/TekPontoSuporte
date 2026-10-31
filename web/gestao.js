@@ -434,6 +434,32 @@ export function registrarGestao(ctx) {
 
   // --- Técnicos (cadastro) ---------------------------------------------------
 
+  function situacaoAcesso(t) {
+    if (!t.usuario_id) return '<span class="nota">sem acesso</span>';
+    if (!t.acesso_ativo) return '<span class="etiqueta neutro">desativado</span>';
+    if (t.acesso_provisorio) return '<span class="etiqueta pendente">aguardando 1º acesso</span>';
+    return `<span class="etiqueta ok">ativo</span><br><small>${t.ultimo_acesso ? `último acesso ${dataHora(t.ultimo_acesso)}` : ''}</small>`;
+  }
+
+  // Senhas provisórias aparecem uma única vez (não ficam guardadas em texto em lugar nenhum).
+  function mostrarSenhas(lista, pulados) {
+    const dialogo = $('#dialogo');
+    const texto = lista.map((x) => `${x.nome} | ${x.email} | senha provisória: ${x.padrao ? '(senha padrão)' : x.senha}`).join('\n');
+    $('#dialogo-form').innerHTML = `<h2>${lista.length === 1 ? 'Senha provisória' : `${lista.length} acesso(s) criado(s)`}</h2>
+      ${lista.length ? `<p>${lista.every((x) => x.padrao) ? 'Todos começam com a <strong>senha padrão</strong> definida pela coordenação' : 'Entregue a senha a cada técnico. <strong>Ela aparece só agora</strong>'} e precisa ser trocada no 1º acesso.</p>
+      <table class="tabela-senhas"><thead><tr><th>Técnico</th><th>E-mail (login)</th><th>Senha provisória</th></tr></thead>
+        <tbody>${lista.map((x) => `<tr><td>${esc(x.nome)}</td><td>${esc(x.email)}</td><td>${x.padrao ? '<em>senha padrão</em>' : `<code>${esc(x.senha)}</code>`}</td></tr>`).join('')}</tbody></table>
+      <p class="nota">Endereço do painel: <code>${esc(location.origin)}</code></p>` : ''}
+      ${pulados.length ? `<div class="aviso-faixa">Não criados: ${pulados.map(esc).join('<br>')}</div>` : ''}
+      <div class="acoes">${lista.length ? '<button class="botao" type="button" id="copiar-senhas">Copiar</button>' : ''}<button class="botao primario" type="button" id="fechar-senhas">Fechar</button></div>`;
+    $('#dialogo-form').onsubmit = (e) => e.preventDefault();
+    $('#copiar-senhas')?.addEventListener('click', async (e) => {
+      try { await navigator.clipboard.writeText(texto); e.target.textContent = 'Copiado!'; } catch { e.target.textContent = 'Selecione e copie manualmente'; }
+    });
+    $('#fechar-senhas').addEventListener('click', () => { dialogo.close(); rotear(); });
+    dialogo.showModal();
+  }
+
   paginas.equipe = async () => {
     if (!ehGestor()) { location.hash = '#/individual'; return; }
     const d = await api('/api/equipe');
@@ -441,9 +467,11 @@ export function registrarGestao(ctx) {
     const lista = d.tecnicos.filter((t) => !soEquipe || t.na_equipe);
     const jornada = (m) => (m == null ? '' : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
     pagina.innerHTML = `<div class="cabecalho"><div><h1>Técnicos</h1><p>Cadastro da equipe do Ponto. Nome e e-mail vêm do Digisac; o resto é da gestão.</p></div>
-        <div class="filtros"><label class="opcao"><input type="checkbox" id="so-equipe" ${soEquipe ? 'checked' : ''}> Só a equipe do Ponto</label></div></div>
+        <div class="filtros"><label class="opcao"><input type="checkbox" id="so-equipe" ${soEquipe ? 'checked' : ''}> Só a equipe do Ponto</label>
+          <button class="botao" id="senha-padrao">Senha padrão: ${d.senhaPadraoDefinida ? '<strong>definida</strong>' : 'não definida'}</button>
+          <button class="botao primario" id="criar-acessos">Criar acessos da equipe</button></div></div>
       <div class="cartao"><div class="tabela-envolve"><table>
-        <thead><tr><th>Técnico</th><th>Situação</th><th>Matrícula</th><th>Função</th><th>Admissão</th><th>Jornada</th><th class="num">Meta padrão</th><th class="num">Meta vigente</th><th>Escala</th><th>Atendente na GoTo</th><th></th></tr></thead>
+        <thead><tr><th>Técnico</th><th>Situação</th><th>Matrícula</th><th>Função</th><th>Admissão</th><th>Jornada</th><th class="num">Meta padrão</th><th class="num">Meta vigente</th><th>Escala</th><th>Atendente na GoTo</th><th>Acesso ao painel</th><th></th></tr></thead>
         <tbody>${lista.map((t) => `<tr>
           <td>${esc(t.nome)}${t.na_equipe ? '' : ' <span class="etiqueta neutro">fora da equipe</span>'}<br><small>${esc(t.email ?? '')}</small></td>
           <td><span class="etiqueta ${t.situacao === 'Ativo' ? 'ok' : 'neutro'}">${esc(t.situacao)}</span></td>
@@ -451,9 +479,59 @@ export function registrarGestao(ctx) {
           <td>${jornada(t.jornada_min) || `<small>${jornada(d.jornadaPadraoMin)} (padrão)</small>`}</td>
           <td class="num">${num(t.meta_padrao, 0)}</td><td class="num">${num(t.meta_vigente, 0)}</td><td>${esc(t.escala ?? '—')}</td>
           <td>${t.goto_agente ? esc(t.goto_agente) : '<span class="nota">—</span>'}</td>
-          <td><button class="botao" data-editar="${esc(t.id)}">Editar</button></td></tr>`).join('')}</tbody></table></div>
-        <p class="nota">"Na equipe" define quem entra nos dashboards, metas e disponibilidade. O vínculo com a GoTo foi feito automaticamente pelo nome; corrija aqui se precisar.</p></div>`;
+          <td>${situacaoAcesso(t)}</td>
+          <td><div class="acoes"><button class="botao" data-editar="${esc(t.id)}">Editar</button>
+            ${!t.usuario_id ? `<button class="botao" data-acesso="senha" data-tecnico="${esc(t.id)}">Criar acesso</button>`
+              : `<button class="link" data-acesso="senha" data-tecnico="${esc(t.id)}">nova senha</button>
+                 <button class="link" data-acesso="${t.acesso_ativo ? 'desativar' : 'reativar'}" data-tecnico="${esc(t.id)}">${t.acesso_ativo ? 'desativar' : 'reativar'}</button>`}</div></td></tr>`).join('')}</tbody></table></div>
+        <p class="nota">"Na equipe" define quem entra nos dashboards, metas e disponibilidade. O vínculo com a GoTo foi feito automaticamente pelo nome; corrija aqui se precisar.
+          O acesso usa o e-mail do Digisac e uma senha provisória, trocada pelo técnico no 1º acesso. O técnico vê só os próprios dados.</p></div>`;
     $('#so-equipe').addEventListener('change', (e) => { estado.cadastroSoEquipe = e.target.checked; rotear(); });
+    $('#senha-padrao').addEventListener('click', () => {
+      abrirDialogo(`<h2>Senha padrão dos técnicos</h2>
+        <p>Com uma senha padrão, todo acesso novo (e "nova senha") começa com ela, em vez de uma senha aleatória.
+          <strong>No 1º acesso o técnico continua obrigado a criar a própria senha</strong>, para ninguém entrar na conta de outro.</p>
+        <label>Senha padrão (mín. 6 caracteres)<input type="password" name="senha" minlength="6" autocomplete="new-password" required></label>
+        <label>Repita a senha padrão<input type="password" name="confirmar" minlength="6" autocomplete="new-password" required></label>
+        <label class="opcao"><input type="checkbox" name="aplicar_pendentes" value="1" checked> Aplicar também a quem ainda não fez o 1º acesso</label>
+        <p class="nota">Quem já criou a própria senha não é afetado. A senha padrão não fica guardada em texto: anote-a.</p>
+        ${d.senhaPadraoDefinida ? '<p><button type="button" class="link" id="remover-padrao">Remover a senha padrão (voltar às senhas aleatórias)</button></p>' : ''}`,
+      async (dados) => {
+        if (dados.senha !== dados.confirmar) throw new Error('As duas senhas não são iguais');
+        const r = await api('/api/equipe/senha-padrao', { method: 'POST', body: { senha: dados.senha, aplicar_pendentes: dados.aplicar_pendentes === '1' } });
+        aviso(`Senha padrão definida${r.aplicados ? ` e aplicada a ${r.aplicados} técnico(s) que ainda não fizeram o 1º acesso` : ''}.`);
+        rotear();
+      });
+      $('#remover-padrao')?.addEventListener('click', async () => {
+        try {
+          await api('/api/equipe/senha-padrao', { method: 'POST', body: { senha: '' } });
+          $('#dialogo').close();
+          aviso('Senha padrão removida. Novos acessos voltam a receber senha aleatória.');
+          rotear();
+        } catch (err) { $('#erro-dialogo').textContent = err.message; }
+      });
+    });
+    $('#criar-acessos').addEventListener('click', async () => {
+      const semAcesso = d.tecnicos.filter((t) => t.na_equipe && t.situacao === 'Ativo' && !t.usuario_id);
+      if (!semAcesso.length) { aviso('Todos os técnicos ativos da equipe já têm acesso.'); return; }
+      if (!confirm(`Criar acesso para ${semAcesso.length} técnico(s)? ${semAcesso.map((t) => t.nome).join(', ')}`)) return;
+      try {
+        const r = await api('/api/equipe/acessos', { method: 'POST', body: {} });
+        mostrarSenhas(r.criados, r.pulados);
+      } catch (err) { aviso(err.message, true); }
+    });
+    $$('[data-acesso]').forEach((b) => b.addEventListener('click', async () => {
+      const t = d.tecnicos.find((x) => x.id === b.dataset.tecnico);
+      const acao = b.dataset.acesso;
+      const pergunta = { senha: t.usuario_id ? `Gerar uma nova senha provisória para ${t.nome}? A senha atual deixa de funcionar.` : `Criar o acesso de ${t.nome} (${t.email ?? 'sem e-mail'})?`,
+        desativar: `Desativar o acesso de ${t.nome}? Ele(a) sai do painel na hora.`, reativar: `Reativar o acesso de ${t.nome}?` }[acao];
+      if (!confirm(pergunta)) return;
+      try {
+        const r = await api(`/api/equipe/${encodeURIComponent(t.id)}/acesso`, { method: 'POST', body: { acao } });
+        if (acao === 'senha') mostrarSenhas([r], []);
+        else { aviso(acao === 'desativar' ? 'Acesso desativado.' : 'Acesso reativado.'); rotear(); }
+      } catch (err) { aviso(err.message, true); }
+    }));
     $$('[data-editar]').forEach((b) => b.addEventListener('click', () => {
       const t = d.tecnicos.find((x) => x.id === b.dataset.editar);
       const usados = new Set(d.tecnicos.filter((x) => x.id !== t.id).map((x) => x.goto_agente).filter(Boolean));

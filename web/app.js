@@ -55,6 +55,7 @@ async function api(caminho, opcoes = {}) {
   });
   const dados = await resp.json().catch(() => ({}));
   if (resp.status === 401 && caminho !== '/api/entrar') { mostrarLogin(); throw new Error(dados.erro ?? 'Sessão expirada'); }
+  if (resp.status === 403 && estado.usuario?.deve_trocar_senha) { exigirTrocaDeSenha(); throw new Error(dados.erro); }
   if (!resp.ok) throw new Error(dados.erro ?? `Erro ${resp.status}`);
   return dados;
 }
@@ -228,12 +229,56 @@ async function atualizarStatus() {
   contador.textContent = s.pendentesRevisao;
 }
 
+// Senha provisória (acesso criado pela coordenação): antes de qualquer tela, a pessoa cria a
+// própria senha. O servidor também bloqueia tudo até a troca; aqui não há como fechar a janela.
+function exigirTrocaDeSenha() {
+  const dialogo = $('#dialogo');
+  const form = $('#dialogo-form');
+  $('#login').hidden = true;
+  form.innerHTML = `<h2>Crie sua senha</h2>
+    <p>Olá, ${esc(estado.usuario.nome)}! Você entrou com uma senha provisória. Para continuar, crie uma senha só sua.</p>
+    <label>Senha provisória<input type="password" name="atual" required autocomplete="current-password"></label>
+    <label>Nova senha (mín. 10 caracteres)<input type="password" name="nova" required minlength="10" autocomplete="new-password"></label>
+    <label>Repita a nova senha<input type="password" name="confirmar" required minlength="10" autocomplete="new-password"></label>
+    <p class="erro" id="erro-dialogo"></p>
+    <div class="acoes"><button class="botao primario">Salvar e entrar</button><button class="botao" type="button" id="troca-sair">Sair</button></div>`;
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const d = Object.fromEntries(new FormData(form));
+    if (d.nova !== d.confirmar) { $('#erro-dialogo').textContent = 'As duas senhas novas não são iguais'; return; }
+    try {
+      await api('/api/minha-senha', { method: 'POST', body: { atual: d.atual, nova: d.nova } });
+      estado.usuario.deve_trocar_senha = false;
+      dialogo.close();
+      aviso('Senha criada. Bem-vindo(a)!');
+      await iniciarApp();
+    } catch (err) { $('#erro-dialogo').textContent = err.message; }
+  };
+  $('#troca-sair').addEventListener('click', async () => {
+    await api('/api/sair', { method: 'POST' }).catch(() => {});
+    estado.usuario = null;
+    dialogo.close();
+    mostrarLogin();
+  });
+  if (!dialogo.open) dialogo.showModal();
+  $('[name=atual]', form).focus();
+}
+$('#dialogo').addEventListener('cancel', (e) => { if (estado.usuario?.deve_trocar_senha) e.preventDefault(); });
+
+// Menu do técnico: só os próprios dados, com nomes no singular.
+const MENU_TECNICO = { individual: 'Meu dashboard', conversas: 'Minhas conversas', calendario: 'Meu calendário' };
+
 async function iniciarApp() {
+  if (estado.usuario.deve_trocar_senha) { exigirTrocaDeSenha(); return; }
   $('#login').hidden = true;
   $('#app').hidden = false;
   $('#nome-usuario').textContent = `${estado.usuario.nome} · `;
   $$('#menu [data-perfil]').forEach((a) => {
     a.hidden = a.dataset.perfil === 'admin' ? !ehAdmin() : !ehGestor();
+  });
+  $$('#menu a[data-pagina]').forEach((a) => {
+    a.dataset.rotulo ??= a.firstChild.textContent.trim();
+    a.firstChild.textContent = (!ehGestor() && MENU_TECNICO[a.dataset.pagina]) || a.dataset.rotulo;
   });
   estado.filtrosDisponiveis = await api('/api/filtros');
   await atualizarStatus();
@@ -246,10 +291,10 @@ const paginas = {};
 
 function rotear() {
   if (!estado.usuario) return;
-  const [, nome = 'painel', param] = location.hash.split('/');
+  const [, nome = ehGestor() ? 'painel' : 'individual', param] = location.hash.split('/');
   $$('#menu a').forEach((a) => a.classList.toggle('ativo', a.dataset.pagina === (nome === 'conversa' ? 'conversas' : nome)));
   destruirGraficos();
-  const fn = paginas[nome] ?? paginas.painel;
+  const fn = paginas[nome] ?? (ehGestor() ? paginas.painel : paginas.individual);
   pagina.innerHTML = '<p class="vazio">Carregando...</p>';
   fn(param ? decodeURIComponent(param) : undefined).catch((e) => {
     pagina.innerHTML = `<div class="cartao"><p class="erro">${esc(e.message)}</p></div>`;
@@ -319,6 +364,7 @@ function kpisVoz(v) {
 }
 
 paginas.painel = async () => {
+  if (!ehGestor()) { location.hash = '#/individual'; return; }
   const p = await api(`/api/painel?${consultaFiltro()}`);
   const r = p.resumo;
   pagina.innerHTML = `

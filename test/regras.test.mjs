@@ -16,7 +16,8 @@ const { mascarar, transcrever, consultarModelo, ErroPararFila } = await import('
 const { transcreverArquivo } = await import('../src/transcricao.mjs');
 const { autorDaMensagem, textoDaMensagem, gravarChamado, gravarMensagens } = await import('../src/sync.mjs');
 const { db } = await import('../src/db.mjs');
-const { gerarHash, conferirSenha, entrar } = await import('../src/auth.mjs');
+const auth = await import('../src/auth.mjs');
+const { gerarHash, conferirSenha, entrar } = auth;
 
 const m = (autor, minuto) => ({ autor, quando: new Date(Date.UTC(2026, 9, 1, 12, minuto)).toISOString() });
 
@@ -227,4 +228,23 @@ test('gestão: meta do dia segue disponibilidade, feriado e meta por período; p
   assert.equal(r.dias_uteis, 4);
   assert.equal(r.meta, 10 + 5 + 20 + 20);
   assert.equal(r.realizado, 2);
+});
+
+test('acesso do técnico: senha provisória legível e login avisa que precisa trocar', () => {
+  const { senhaProvisoria, gerarHash, entrar: entrarComo, validarSenha } = auth;
+  const senha = senhaProvisoria();
+  assert.match(senha, /^[A-Za-z2-9]{4}-[A-Za-z2-9]{4}-[A-Za-z2-9]{4}$/);
+  assert.doesNotMatch(senha, /[01OlI]/);              // sem caracteres que se confundem ao ditar
+  assert.equal(validarSenha(senha), null);           // passa na regra de tamanho mínimo
+  db.prepare("INSERT INTO usuarios (email, nome, perfil, tecnico_id, senha_hash, deve_trocar_senha) VALUES ('novo.tecnico@exemplo.invalid', 'Novo Técnico', 'tecnico', 'g1', ?, 1)").run(gerarHash(senha));
+  const r = entrarComo('novo.tecnico@exemplo.invalid', senha, '10.0.0.9');
+  assert.equal(r.usuario.deve_trocar_senha, true);
+  assert.equal(r.usuario.perfil, 'tecnico');
+  assert.ok(db.prepare("SELECT ultimo_acesso FROM usuarios WHERE email = 'novo.tecnico@exemplo.invalid'").get().ultimo_acesso);
+});
+
+test('senha padrão aceita 6 caracteres; a senha pessoal continua exigindo 10', () => {
+  assert.equal(auth.validarSenha('Tek123', auth.MINIMO_SENHA_PADRAO), null);
+  assert.match(auth.validarSenha('Tek12', auth.MINIMO_SENHA_PADRAO), /6 caracteres/);
+  assert.match(auth.validarSenha('Tek123'), /10 caracteres/);
 });

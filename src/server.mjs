@@ -121,7 +121,7 @@ rota('POST', '/api/sair', async (req, res) => {
 
 rota('GET', '/api/eu', (req, res, { u }) => responder(res, 200, { usuario: u }));
 
-rota('GET', '/api/status', (req, res) => {
+rota('GET', '/api/status', (req, res, { u }) => {
   const ultima = db.prepare('SELECT * FROM execucoes_sync ORDER BY id DESC LIMIT 1').get() ?? null;
   responder(res, 200, {
     digisacConfigurado: digisacConfigurado(),
@@ -133,7 +133,8 @@ rota('GET', '/api/status', (req, res) => {
     ultimaExecucao: ultima,
     intervaloMinutos: config.digisac.intervaloMinutos,
     retencaoDias: config.retencaoMensagensDias,
-    pendentesRevisao: db.prepare("SELECT COUNT(*) n FROM analises_ia WHERE status = 'pendente'").get().n,
+    // Contagem da equipe: só para a coordenação.
+    pendentesRevisao: auth.podeGerir(u) ? db.prepare("SELECT COUNT(*) n FROM analises_ia WHERE status = 'pendente'").get().n : 0,
   });
 });
 
@@ -449,7 +450,7 @@ rota('POST', '/api/usuarios', async (req, res, { u, ip }) => {
     if (b.senha) {
       const erro = auth.validarSenha(b.senha);
       if (erro) throw new ErroHttp(400, erro);
-      db.prepare('UPDATE usuarios SET senha_hash = ? WHERE id = ?').run(auth.gerarHash(b.senha), b.id);
+      db.prepare('UPDATE usuarios SET senha_hash = ?, deve_trocar_senha = ? WHERE id = ?').run(auth.gerarHash(b.senha), Number(b.id) === u.id ? 0 : 1, b.id);
       db.prepare('DELETE FROM sessoes WHERE usuario_id = ?').run(b.id);
     }
     if (b.ativo === false) db.prepare('DELETE FROM sessoes WHERE usuario_id = ?').run(b.id);
@@ -458,7 +459,7 @@ rota('POST', '/api/usuarios', async (req, res, { u, ip }) => {
     const erro = auth.validarSenha(b.senha ?? '');
     if (erro) throw new ErroHttp(400, erro);
     try {
-      const r = db.prepare('INSERT INTO usuarios (email, nome, perfil, tecnico_id, senha_hash) VALUES (?, ?, ?, ?, ?)')
+      const r = db.prepare('INSERT INTO usuarios (email, nome, perfil, tecnico_id, senha_hash, deve_trocar_senha) VALUES (?, ?, ?, ?, ?, 1)')
         .run(b.email.trim(), b.nome.trim(), b.perfil, b.tecnico_id || null, auth.gerarHash(b.senha));
       auditar(u.id, 'usuario_criado', String(r.lastInsertRowid), { email: b.email, perfil: b.perfil }, ip);
     } catch (e) {
@@ -475,8 +476,9 @@ rota('POST', '/api/minha-senha', async (req, res, { u, ip }) => {
   if (!auth.conferirSenha(String(b.atual ?? ''), atual.senha_hash)) throw new ErroHttp(400, 'Senha atual incorreta');
   const erro = auth.validarSenha(b.nova ?? '');
   if (erro) throw new ErroHttp(400, erro);
-  db.prepare('UPDATE usuarios SET senha_hash = ? WHERE id = ?').run(auth.gerarHash(b.nova), u.id);
-  auditar(u.id, 'senha_alterada', null, null, ip);
+  if (b.nova === b.atual) throw new ErroHttp(400, 'A nova senha deve ser diferente da atual');
+  db.prepare('UPDATE usuarios SET senha_hash = ?, deve_trocar_senha = 0 WHERE id = ?').run(auth.gerarHash(b.nova), u.id);
+  auditar(u.id, u.deve_trocar_senha ? 'senha_provisoria_trocada' : 'senha_alterada', null, null, ip);
   responder(res, 200, { ok: true });
 });
 
@@ -511,6 +513,10 @@ const servidor = http.createServer(async (req, res) => {
     if (!r) throw new ErroHttp(404, 'Rota inexistente');
     const u = auth.usuarioDaSessao(cookie(req, 'sessao'));
     if (!r.publica && !u) throw new ErroHttp(401, 'Sessão expirada; entre novamente');
+    // Senha provisória: só dá para ver quem sou, sair e trocar a senha até definir uma nova.
+    if (u?.deve_trocar_senha && !['/api/eu', '/api/sair', '/api/minha-senha'].includes(url.pathname)) {
+      throw new ErroHttp(403, 'Troque a senha provisória para continuar');
+    }
     await r.fn(req, res, { u, q: url.searchParams, p: url.pathname.match(r.padrao), ip: ipDe(req) });
   } catch (e) {
     if (!(e instanceof ErroHttp)) console.error(e);

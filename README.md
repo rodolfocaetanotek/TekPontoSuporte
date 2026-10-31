@@ -13,7 +13,7 @@ Chat do **Digisac** e voz da **GoTo** num só painel, com revisão humana em tod
 [![GoTo](https://img.shields.io/badge/GoTo-voz-1F9D55)](#-voz-goto)
 [![IA](https://img.shields.io/badge/IA-Groq%20%C2%B7%20Whisper%20%C2%B7%20Ollama-6E40C9)](#-inteligência-artificial)
 [![LGPD](https://img.shields.io/badge/LGPD-mascaramento%20%C2%B7%20auditoria%20%C2%B7%20retenção-002C0B)](#-segurança-e-lgpd)
-[![Testes](https://img.shields.io/badge/testes-19%20passando-1F9D55)](#-testes-e-comandos)
+[![Testes](https://img.shields.io/badge/testes-21%20passando-1F9D55)](#-testes-e-comandos)
 
 [Funcionalidades](#-funcionalidades) · [Telas](#-telas) · [Começando](#-começando) · [Arquitetura](#-arquitetura) · [Indicadores](#-como-os-indicadores-são-calculados) · [IA](#-inteligência-artificial) · [LGPD](#-segurança-e-lgpd)
 
@@ -56,7 +56,9 @@ Roda em qualquer Windows com Node.js, sem Docker e sem banco externo: o banco é
 <td>Conferência dos números contra a estatística oficial do Digisac, perfis de acesso, trilha de auditoria de tudo que é lido ou alterado</td></tr>
 </table>
 
-**Perfis:** *administrador* e *coordenação* veem tudo. O *técnico* vê só os próprios atendimentos, o próprio dashboard (com a posição dele nos rankings, sem os números dos colegas) e as próprias ausências no calendário.
+**Perfis:** *administrador* e *coordenação* veem tudo. O *técnico* vê só os próprios dados, como na Base Bruno: **Meu dashboard** (com a posição dele nos rankings, sem os números dos colegas), **Minhas conversas** e **Meu calendário**.
+
+**Acesso dos técnicos:** em **Técnicos**, a coordenação cria o acesso de um técnico ou da equipe inteira (botão *Criar acessos da equipe*). O login é o e-mail do Digisac, e a **senha provisória aparece uma única vez**. No 1º acesso o técnico é obrigado a criar a própria senha; até lá o servidor bloqueia todo o resto. Pela mesma tela dá para gerar uma nova senha, desativar ou reativar o acesso, e cada ação vai para a auditoria. Opcionalmente, defina uma **senha padrão** (botão *Senha padrão*, mínimo de 6 caracteres; a senha pessoal criada no 1º acesso exige 10): acessos novos e "nova senha" passam a começar com ela, em vez de uma senha aleatória. Ela também pode ser aplicada a quem ainda não fez o 1º acesso, mas nunca a quem já criou a própria senha. Só o hash fica guardado, e a troca no 1º acesso continua obrigatória.
 
 ## 🖼️ Telas
 
@@ -270,7 +272,7 @@ docs/img/            capturas de tela (dados fictícios)
 | Comando | O que faz |
 |---|---|
 | `npm start` | sobe o painel em `http://localhost:4250` |
-| `npm test` | roda os 19 testes das regras (indicadores, IA, LGPD, gestão) |
+| `npm test` | roda os 21 testes das regras (indicadores, IA, LGPD, gestão) |
 | `npm run usuario -- --admin` | cria ou redefine um usuário |
 | `npm run sincronizar` / `sincronizar:completo` | sincroniza com o Digisac pelo terminal |
 | `npm run importar-goto` | importa a base da GoTo agora |

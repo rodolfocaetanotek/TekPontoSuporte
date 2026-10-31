@@ -2,7 +2,7 @@
 // chamadas, cadastro de técnicos, disponibilidade, calendário, escalas, metas e feriados.
 // Escrita só pela coordenação, sempre auditada. O técnico vê o próprio dashboard e, no
 // calendário, só as próprias ausências (atestado é dado de saúde: LGPD).
-import { db, auditar, transacao } from './db.mjs';
+import { db, auditar, transacao, lerEstado, gravarEstado } from './db.mjs';
 import * as auth from './auth.mjs';
 import * as g from './gestao.mjs';
 import { importarBase, infoBase } from './base-goto.mjs';
@@ -37,7 +37,7 @@ export function registrarRotasGestao({ rota, responder, corpoJson, exigirGestor,
   // Técnico só enxerga os próprios números.
   const tecnicoPermitido = (u, id) => {
     const escopo = auth.escopoTecnico(u);
-    if (escopo && id !== escopo) throw new ErroHttp(403, 'Você só pode ver o seu próprio dashboard');
+    if (escopo && id && id !== escopo) throw new ErroHttp(403, 'Você só pode ver o seu próprio dashboard');
     return escopo ?? id;
   };
 
@@ -175,10 +175,95 @@ export function registrarRotasGestao({ rota, responder, corpoJson, exigirGestor,
         t.goto_agente, t.situacao,
         (SELECT e.nome FROM tecnico_escalas te JOIN escalas e ON e.id = te.escala_id WHERE te.tecnico_id = t.id AND te.desde <= ? AND (te.ate IS NULL OR te.ate >= ?) ORDER BY te.desde DESC LIMIT 1) AS escala,
         (SELECT m.meta FROM metas_periodo m WHERE m.tecnico_id = t.id AND m.desde <= ? ORDER BY m.desde DESC LIMIT 1) AS meta_vigente,
-        (SELECT COUNT(*) FROM chamados c WHERE c.tecnico_id = t.id) AS chamados
-      FROM tecnicos t ORDER BY t.na_equipe DESC, t.nome`).all(hoje, hoje, hoje);
+        (SELECT COUNT(*) FROM chamados c WHERE c.tecnico_id = t.id) AS chamados,
+        us.id AS usuario_id, us.ativo AS acesso_ativo, us.deve_trocar_senha AS acesso_provisorio, us.ultimo_acesso
+      FROM tecnicos t LEFT JOIN usuarios us ON us.tecnico_id = t.id AND us.perfil = 'tecnico'
+      ORDER BY t.na_equipe DESC, t.nome`).all(hoje, hoje, hoje);
     const agentes = db.prepare('SELECT agente, COUNT(*) AS ligacoes FROM ligacoes GROUP BY agente ORDER BY agente').all();
-    responder(res, 200, { tecnicos, agentes, funcoes: FUNCOES, jornadaPadraoMin: g.JORNADA_PADRAO_MIN });
+    responder(res, 200, { tecnicos, agentes, funcoes: FUNCOES, jornadaPadraoMin: g.JORNADA_PADRAO_MIN, senhaPadraoDefinida: !!lerEstado('senha_padrao_tecnicos') });
+  });
+
+  // --- Acesso dos técnicos (como na Base Bruno) ---------------------------------
+  // A coordenação cria o login do técnico com o e-mail do Digisac e uma senha provisória, que
+  // aparece uma única vez e precisa ser trocada no 1º acesso. O técnico vê só os próprios dados.
+  const usuarioDoTecnico = (tecnicoId) => db.prepare("SELECT * FROM usuarios WHERE tecnico_id = ? AND perfil = 'tecnico'").get(tecnicoId);
+  // Senha padrão dos técnicos (opcional): fica só o hash; com ela definida, acessos novos e
+  // "nova senha" usam a mesma senha, que continua provisória (troca obrigatória no 1º acesso).
+  const hashSenhaPadrao = () => lerEstado('senha_padrao_tecnicos');
+
+  function criarOuRedefinirAcesso(t, autor, ip) {
+    const email = String(t.email ?? '').trim();
+    if (!/^\S+@\S+\.\S+$/.test(email)) falha(`${t.nome}: sem e-mail válido no Digisac; cadastre o e-mail lá ou crie o usuário em Usuários`);
+    const padrao = hashSenhaPadrao();
+    const senha = padrao ? null : auth.senhaProvisoria();
+    const hash = padrao ?? auth.gerarHash(senha);
+    const atual = usuarioDoTecnico(t.id);
+    if (atual) {
+      db.prepare('UPDATE usuarios SET senha_hash = ?, deve_trocar_senha = 1, ativo = 1 WHERE id = ?').run(hash, atual.id);
+      db.prepare('DELETE FROM sessoes WHERE usuario_id = ?').run(atual.id);
+      auditar(autor.id, 'acesso_tecnico_redefinido', t.id, { email: atual.email, senha_padrao: !!padrao }, ip);
+      return { nome: t.nome, email: atual.email, senha, padrao: !!padrao, novo: false };
+    }
+    const outro = db.prepare('SELECT perfil FROM usuarios WHERE email = ?').get(email);
+    if (outro) falha(`${t.nome}: o e-mail ${email} já tem um usuário (${outro.perfil}); ajuste em Usuários`);
+    const r = db.prepare("INSERT INTO usuarios (email, nome, perfil, tecnico_id, senha_hash, deve_trocar_senha) VALUES (?, ?, 'tecnico', ?, ?, 1)")
+      .run(email, t.nome, t.id, hash);
+    auditar(autor.id, 'acesso_tecnico_criado', t.id, { email, usuario: Number(r.lastInsertRowid), senha_padrao: !!padrao }, ip);
+    return { nome: t.nome, email, senha, padrao: !!padrao, novo: true };
+  }
+
+  // Define (ou remove, com senha vazia) a senha padrão. Opcionalmente aplica a quem ainda não fez
+  // o 1º acesso; quem já criou a própria senha não é afetado.
+  rota('POST', '/api/equipe/senha-padrao', async (req, res, { u, ip }) => {
+    exigirGestor(u);
+    const b = await corpoJson(req);
+    if (!b.senha) {
+      gravarEstado('senha_padrao_tecnicos', null);
+      auditar(u.id, 'senha_padrao_removida', null, null, ip);
+      return responder(res, 200, { definida: false, aplicados: 0 });
+    }
+    const erro = auth.validarSenha(b.senha, auth.MINIMO_SENHA_PADRAO);
+    if (erro) falha(erro);
+    const hash = auth.gerarHash(b.senha);
+    let aplicados = 0;
+    transacao(() => {
+      gravarEstado('senha_padrao_tecnicos', hash);
+      if (b.aplicar_pendentes) {
+        const pendentes = db.prepare("SELECT id FROM usuarios WHERE perfil = 'tecnico' AND deve_trocar_senha = 1").all();
+        for (const p of pendentes) {
+          db.prepare('UPDATE usuarios SET senha_hash = ? WHERE id = ?').run(hash, p.id);
+          db.prepare('DELETE FROM sessoes WHERE usuario_id = ?').run(p.id);
+        }
+        aplicados = pendentes.length;
+      }
+    });
+    auditar(u.id, 'senha_padrao_definida', null, { aplicada_a_pendentes: aplicados }, ip);
+    responder(res, 200, { definida: true, aplicados });
+  });
+
+  rota('POST', '/api/equipe/([^/]+)/acesso', async (req, res, { u, p, ip }) => {
+    exigirGestor(u);
+    const t = db.prepare('SELECT id, nome, email FROM tecnicos WHERE id = ?').get(p[1]) ?? falha('Técnico não encontrado');
+    const { acao } = await corpoJson(req);
+    if (acao === 'senha') return responder(res, 200, criarOuRedefinirAcesso(t, u, ip));
+    const atual = usuarioDoTecnico(t.id) ?? falha('Este técnico ainda não tem acesso');
+    if (!['desativar', 'reativar'].includes(acao)) falha('Ação inválida');
+    db.prepare('UPDATE usuarios SET ativo = ? WHERE id = ?').run(acao === 'reativar' ? 1 : 0, atual.id);
+    if (acao === 'desativar') db.prepare('DELETE FROM sessoes WHERE usuario_id = ?').run(atual.id);
+    auditar(u.id, `acesso_tecnico_${acao === 'reativar' ? 'reativado' : 'desativado'}`, t.id, { email: atual.email }, ip);
+    responder(res, 200, { ok: true });
+  });
+
+  // Cria o acesso de todos os técnicos ativos da equipe que ainda não têm (não mexe em quem já tem).
+  rota('POST', '/api/equipe/acessos', (req, res, { u, ip }) => {
+    exigirGestor(u);
+    const criados = [];
+    const pulados = [];
+    for (const t of g.equipe()) {
+      if (usuarioDoTecnico(t.id)) continue;
+      try { criados.push(criarOuRedefinirAcesso(t, u, ip)); } catch (e) { pulados.push(e.message); }
+    }
+    responder(res, 200, { criados, pulados });
   });
 
   rota('POST', '/api/equipe/([^/]+)', async (req, res, { u, p, ip }) => {

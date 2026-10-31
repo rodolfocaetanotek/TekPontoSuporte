@@ -16,10 +16,12 @@ export function conferirSenha(senha, hash) {
   return timingSafeEqual(scryptSync(senha, Buffer.from(salHex, 'hex'), chave.length), chave);
 }
 
-export function validarSenha(senha) {
-  if (String(senha).length < 10) return 'A senha precisa ter pelo menos 10 caracteres';
+export function validarSenha(senha, minimo = 10) {
+  if (String(senha).length < minimo) return `A senha precisa ter pelo menos ${minimo} caracteres`;
   return null;
 }
+// Senha padrão dos técnicos: é provisória (troca obrigatória no 1º acesso), então aceita menos caracteres.
+export const MINIMO_SENHA_PADRAO = 6;
 
 // Bloqueio simples contra força bruta: 5 erros em 15 min por e-mail+IP.
 const tentativas = new Map();
@@ -42,6 +44,7 @@ export function entrar(email, senha, ip) {
     return { erro: 'E-mail ou senha inválidos' };
   }
   tentativas.delete(chave);
+  db.prepare('UPDATE usuarios SET ultimo_acesso = ? WHERE id = ?').run(new Date().toISOString(), u.id);
   const token = randomBytes(32).toString('base64url');
   const expira = new Date(Date.now() + config.sessaoHoras * 3600_000).toISOString();
   db.prepare('DELETE FROM sessoes WHERE expira_em < ?').run(new Date().toISOString());
@@ -61,7 +64,16 @@ export function usuarioDaSessao(token) {
 }
 
 export function publico(u) {
-  return { id: u.id, email: u.email, nome: u.nome, perfil: u.perfil, tecnico_id: u.tecnico_id, ativo: !!u.ativo };
+  return { id: u.id, email: u.email, nome: u.nome, perfil: u.perfil, tecnico_id: u.tecnico_id, ativo: !!u.ativo,
+    deve_trocar_senha: !!u.deve_trocar_senha, ultimo_acesso: u.ultimo_acesso ?? null };
+}
+
+// Senha provisória fácil de ditar (sem 0/O, 1/l/I): ex. "Kx7m-Pq3r-Tz9w".
+const LETRAS = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+export function senhaProvisoria() {
+  const bytes = randomBytes(12);
+  const c = [...bytes].map((b) => LETRAS[b % LETRAS.length]).join('');
+  return `${c.slice(0, 4)}-${c.slice(4, 8)}-${c.slice(8, 12)}`;
 }
 
 export const podeGerir = (u) => u.perfil === 'admin' || u.perfil === 'coordenador';
