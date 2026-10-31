@@ -11,6 +11,7 @@
     "analisar": "node src/ia.mjs",
     "demo": "node src/demo.mjs",
     "departamentos": "node src/departamentos.mjs",
+    "importar-goto": "node src/base-goto.mjs",
     "comparar-ia": "node src/comparar-ia.mjs",
     "usuario": "node src/usuario.mjs",
     "test": "node --test test/*.test.mjs"

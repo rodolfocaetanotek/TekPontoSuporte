@@ -1,249 +1,286 @@
-# Tek Ponto - Suporte Gestão
+<div align="center">
 
-Plataforma de gestão dos atendimentos do **Suporte de Ponto Eletrônico da Tek Norte** no Digisac:
-sincroniza chamados e conversas pela API, calcula indicadores de produtividade por técnico,
-permite consultar as conversas e usa IA (Claude) para sugerir sentimento, sinais de insatisfação
-e nota de qualidade — **sempre sujeitos à revisão da coordenação**.
+<img src="web/logo.svg" alt="Tek Ponto" width="88">
 
-Node.js 22.5+ (testado no 24), SQLite embutido (`node:sqlite`), sem Docker e sem banco externo.
-Dependências: `@anthropic-ai/sdk` e `chart.js` (copiado para `web/vendor/`). IA local: Ollama portátil em `.tools/` (fora do versionamento).
+# Tek Ponto · Suporte Gestão
 
-## Como usar
+**Indicadores, gestão da equipe e análise de qualidade com IA para o Suporte de Ponto Eletrônico da Tek Norte.**
+Chat do **Digisac** e voz da **GoTo** num só painel, com revisão humana em toda avaliação feita pela IA.
+
+[![Node.js](https://img.shields.io/badge/Node.js-22.5%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![SQLite](https://img.shields.io/badge/SQLite-embutido-003B57?logo=sqlite&logoColor=white)](https://nodejs.org/api/sqlite.html)
+[![Digisac](https://img.shields.io/badge/Digisac-API-D64000)](https://documenter.getpostman.com/view/24605757/2sA3BhfaDg)
+[![GoTo](https://img.shields.io/badge/GoTo-voz-1F9D55)](#-voz-goto)
+[![IA](https://img.shields.io/badge/IA-Groq%20%C2%B7%20Whisper%20%C2%B7%20Ollama-6E40C9)](#-inteligência-artificial)
+[![LGPD](https://img.shields.io/badge/LGPD-mascaramento%20%C2%B7%20auditoria%20%C2%B7%20retenção-002C0B)](#-segurança-e-lgpd)
+[![Testes](https://img.shields.io/badge/testes-19%20passando-1F9D55)](#-testes-e-comandos)
+
+[Funcionalidades](#-funcionalidades) · [Telas](#-telas) · [Começando](#-começando) · [Arquitetura](#-arquitetura) · [Indicadores](#-como-os-indicadores-são-calculados) · [IA](#-inteligência-artificial) · [LGPD](#-segurança-e-lgpd)
+
+<br>
+
+<img src="docs/img/dashboard-gestao.png" alt="Dashboard Gestão" width="900">
+
+<sub>Todas as capturas usam dados fictícios gerados por <code>npm run demo</code>.</sub>
+
+</div>
+
+---
+
+## ✨ O que é
+
+O Tek Ponto · Suporte Gestão reúne em um painel web tudo o que a coordenação do Suporte de Ponto precisa acompanhar:
+
+- **Atendimentos do Digisac (chat)** sincronizados pela API a cada 2 minutos: conversas completas, com áudio, vídeo e imagem.
+- **Ligações da GoTo (voz)** da fila *Ponto Eletrônico*: espera, duração, nível de serviço e pausas.
+- **Produtividade de cada técnico**: meta × realizado (chat + voz), disponibilidade, escalas, feriados e rankings.
+- **IA que lê cada atendimento encerrado**, inclusive o que foi falado nos áudios, e sugere sentimento, sinais de insatisfação e nota de qualidade. **Nada vira indicador sem a aprovação de uma pessoa.**
+
+Roda em qualquer Windows com Node.js, sem Docker e sem banco externo: o banco é um arquivo SQLite local.
+
+## 🧭 Funcionalidades
+
+<table>
+<tr><th>Área</th><th>Telas</th><th>Destaques</th></tr>
+<tr><td><b>📊 Dashboards</b></td>
+<td>Geral · Técnicos · Individual · Gestão · Rankings</td>
+<td>KPIs de chat e voz, mapa de calor, meta × realizado, projeção do período, absenteísmo, alertas, ranking Digisac e de ligações (top 3 em destaque, ordenável por qualquer métrica) e a posição de cada técnico em cada métrica</td></tr>
+<tr><td><b>💬 Atendimento</b></td>
+<td>Conversas · GoTo/Voz · Análise de chamadas · Revisão da IA</td>
+<td>Conversa com player de áudio/vídeo e transcrição automática, busca que inclui o que foi falado, cada ligação com espera e duração, CSV, revisão das análises uma a uma ou em lote</td></tr>
+<tr><td><b>👥 Equipe</b></td>
+<td>Técnicos · Disponibilidade · Calendário · Escalas · Metas por período · Feriados</td>
+<td>Cadastro com função e vínculo GoTo ↔ Digisac, grade mensal de presença (férias, atestado parcial por horário...), escalas com histórico, meta diária com vigência, feriados por tipo</td></tr>
+<tr><td><b>⚙️ Sistema</b></td>
+<td>Sincronização e conferência · Usuários · Auditoria</td>
+<td>Conferência dos números contra a estatística oficial do Digisac, perfis de acesso, trilha de auditoria de tudo que é lido ou alterado</td></tr>
+</table>
+
+**Perfis:** *administrador* e *coordenação* veem tudo. O *técnico* vê só os próprios atendimentos, o próprio dashboard (com a posição dele nos rankings, sem os números dos colegas) e as próprias ausências no calendário.
+
+## 🖼️ Telas
+
+<table>
+<tr>
+<td width="50%"><img src="docs/img/dashboard-geral.png" alt="Dashboard Geral"><br><b>Dashboard Geral</b>: chat e voz no período, sentimento revisado, mapa de calor, assuntos e técnicos.</td>
+<td width="50%"><img src="docs/img/dashboard-individual.png" alt="Dashboard Individual"><br><b>Dashboard Individual</b>: KPIs, posição em cada ranking, dia a dia × meta, presença e pausas.</td>
+</tr>
+<tr>
+<td><img src="docs/img/conversa.png" alt="Conversa com análise da IA"><br><b>Conversa</b>: robô, comentários internos e mídias destacados; análise da IA com evidências.</td>
+<td><img src="docs/img/revisao-ia.png" alt="Revisão da IA"><br><b>Revisão da IA</b>: insatisfação e baixa confiança primeiro; aprovar em lote, ajustar ou descartar.</td>
+</tr>
+<tr>
+<td><img src="docs/img/rankings.png" alt="Rankings"><br><b>Rankings</b>: Digisac e ligações, ordenáveis por volume, tempo de resposta, CSAT, qualidade, TMA...</td>
+<td><img src="docs/img/goto-voz.png" alt="GoTo / Voz"><br><b>GoTo / Voz</b>: fila do Ponto: ligações, espera, nível de serviço, por hora, por atendente, pausas.</td>
+</tr>
+<tr>
+<td><img src="docs/img/disponibilidade.png" alt="Disponibilidade"><br><b>Disponibilidade</b>: grade mês × técnico; ausência parcial calculada pela jornada.</td>
+<td><img src="docs/img/calendario.png" alt="Calendário"><br><b>Calendário</b>: feriados, ausências, trocas de escala e quantos técnicos estão disponíveis.</td>
+</tr>
+</table>
+
+## 🚀 Começando
+
+**Pré-requisito:** [Node.js](https://nodejs.org) 22.5 ou mais novo (testado no 24).
 
 ```bash
+git clone https://github.com/rodolfocaetanotek/TekPontoSuporte.git
+cd TekPontoSuporte
 npm install
-copy .env.exemplo .env          # preencha DIGISAC_URL, DIGISAC_TOKEN e ANTHROPIC_API_KEY
-npm run usuario -- --admin      # cria o primeiro administrador (pede e-mail, nome e senha)
-npm start                       # ou dê dois cliques em painel.cmd → http://localhost:4250
+copy .env.exemplo .env          # preencha DIGISAC_URL, DIGISAC_TOKEN e GROQ_API_KEY
+npm run usuario -- --admin      # cria o primeiro administrador
+npm start                       # ou dois cliques em painel.cmd  →  http://localhost:4250
 ```
 
-Com o Digisac configurado, o servidor sincroniza 5 s após subir e depois a cada
-`SINCRONIZAR_A_CADA_MINUTOS`. Também dá para sincronizar pela tela **Sincronização e conferência**
-ou por linha de comando (`npm run sincronizar`, `npm run sincronizar:completo`). Para agendar sem
-deixar o painel aberto, aponte o Agendador de Tarefas do Windows para `sincronizar.cmd`.
+Com o Digisac configurado, a primeira sincronização começa 5 s depois que o servidor sobe. Ela traz os últimos 90 dias e, depois disso, roda a cada 2 minutos. Em **Sincronização e conferência**, escolha os departamentos monitorados.
 
-**Só quer ver a interface?** `npm run demo` gera ~580 chamados fictícios e um usuário
-`demo@tekponto.local` (a senha aparece no terminal). Remova com `npm run demo -- --limpar`
-antes de ligar o Digisac — enquanto houver dados de demonstração, uma faixa amarela avisa.
+> **Só quer conhecer a interface?** `npm run demo` gera chamados, ligações, metas e ausências **fictícios** e um usuário `demo@tekponto.local` (a senha aparece no terminal). Remova com `npm run demo -- --limpar` antes de ligar o Digisac.
 
-Testes: `npm test`.
+<details>
+<summary><b>Rodar sem deixar o painel aberto</b></summary>
 
-## Telas
+Aponte o Agendador de Tarefas do Windows para `sincronizar.cmd`. Ele sincroniza, espera a fila da IA terminar e encerra.
+</details>
 
-| Tela | Quem vê | O que tem |
+## ⚙️ Configuração
+
+Tudo fica no arquivo `.env` (modelo em [`.env.exemplo`](.env.exemplo)). Os principais:
+
+| Variável | Para quê | Padrão |
 |---|---|---|
-| Dashboard Geral | todos | KPIs do chat e da voz, chamados por dia, sentimento, mapa de calor, assuntos, técnicos, motivos de insatisfação |
-| Dashboard Técnicos | coordenação | por técnico: escala, disponibilidade, meta, chat, voz, realizado, atingimento, TMA voz, pausas, 1ª resposta, CSAT, qualidade |
-| Dashboard Individual | todos (técnico vê só a si) | KPIs do técnico, dia a dia (chat + voz × meta), faixa de presença, pausas, ausências, atendimentos |
-| Dashboard Gestão | coordenação | meta da equipe, projeção do período, disponibilidade, nível de serviço da voz, IA a revisar, semana a semana, alertas, ranking, absenteísmo |
-| Rankings | coordenação | Ranking Digisac (chamados, encerrados, 1ª resposta, TMA, CSAT com 3+ respostas, qualidade IA) e Ranking de ligações (ligações, tempo em conversa, TMA, espera, pausas); ordena por qualquer critério, top 3 destacado; versão resumida no Dashboard Gestão. Função **Apoio** não entra (`FUNCOES_FORA_DO_RANKING` em `src/rotas-gestao.mjs`) |
-| Conversas | todos (técnico vê só as suas) | busca (inclui o que foi falado nos áudios), conversa com áudio/vídeo/imagem |
-| GoTo / Voz | coordenação | fila Ponto Eletrônico: ligações, TME, nível de serviço (≤ 20 s), TMA, por dia, por hora, por atendente, pausas |
-| Análise de chamadas | coordenação | cada ligação com espera e duração, faixas de TMA e de espera, filtros, CSV |
-| Revisão da IA | coordenação | fila de análises pendentes; aprovar (uma ou várias), ajustar ou descartar |
-| Técnicos | coordenação | cadastro da equipe: na equipe, situação, matrícula, função, admissão, jornada, meta padrão, atendente na GoTo |
-| Disponibilidade | coordenação | grade mês × técnico; lança férias, atestado, folga, banco de horas (parcial por horário) |
-| Calendário | todos (técnico vê só as suas ausências) | feriados, ausências, trocas de escala e técnicos disponíveis por dia |
-| Escalas | coordenação | horários de trabalho e escala de cada técnico com vigência e histórico |
-| Metas por período | coordenação | meta diária a partir de uma data (por técnico ou toda a equipe), histórico |
-| Feriados | coordenação | por ano; tipos nacional, estadual, municipal, facultativo, empresa |
-| Sincronização e conferência | coordenação | status, histórico de execuções, conferência com a estatística oficial do Digisac |
-| Usuários / Auditoria | administrador | contas, perfis, vínculo com o técnico do Digisac; trilha de auditoria |
+| `DIGISAC_URL` / `DIGISAC_TOKEN` | Conta e token pessoal do Digisac (Configurações › Tokens) | — |
+| `SINCRONIZAR_A_CADA_MINUTOS` | Intervalo da sincronização incremental | `2` |
+| `IA_PROVEDOR` | `groq` (nuvem, gratuito) · `ollama` (local) · `anthropic` (Claude, pago) | `groq` |
+| `GROQ_API_KEY` | Chave do [Groq](https://console.groq.com) para análise e transcrição | — |
+| `IA_MODELO` | Modelo de análise | `openai/gpt-oss-120b` |
+| `IA_TRANSCREVER_MIDIA` | Transcrever áudios e vídeos antes da análise | `sim` |
+| `BASE_GOTO_PASTA` / `BASE_GOTO_FILA` | Pasta do banco com as ligações da GoTo e a fila importada | `Ponto Eletrônico` |
+| `RETENCAO_MENSAGENS_DIAS` | Dias que o texto das conversas fica guardado (LGPD) | `365` |
+| `HOST` / `PORTA` | Endereço do painel (`127.0.0.1` = só esta máquina) | `127.0.0.1:4250` |
 
-## Gestão da equipe e voz (GoTo)
+## 🏗️ Arquitetura
 
-`src/base-goto.mjs`, `src/gestao.mjs`, `src/rotas-gestao.mjs`, `web/gestao.js`. O modelo veio da
-**Base Bruno** (`BASE_GOTO_PASTA`), o banco SQLite do sistema de gestão das outras áreas, que
-recebe as ligações da API da GoTo. O arquivo mais recente da pasta é aberto **só para leitura** e
-reimportado sozinho a cada ciclo quando muda (ou em GoTo/Voz > Reimportar; `node src/base-goto.mjs`).
+```mermaid
+flowchart LR
+    subgraph Fontes
+        D[Digisac API<br/>chamados · mensagens · CSAT]
+        B[(Base Bruno<br/>ligações GoTo)]
+    end
+    subgraph Servidor["Servidor Node.js (sem framework)"]
+        S[Sincronização<br/>a cada 2 min] --> DB[(SQLite local)]
+        I[Importador GoTo<br/>só leitura] --> DB
+        DB --> F[Fila da IA]
+        F --> T[Transcrição<br/>Whisper]
+        F --> A[Análise<br/>sentimento · qualidade]
+        DB --> API[API + auditoria]
+    end
+    D --> S
+    B --> I
+    T -. texto mascarado .-> G[(Groq)]
+    A -. texto mascarado .-> G
+    API --> W[Painel web<br/>dashboards · conversas · equipe]
+    W --> R{{Revisão humana}}
+    R -->|aprovada/ajustada| DB
+```
 
-- **Importado**: ligações da fila `BASE_GOTO_FILA` (Ponto Eletrônico; espera = `time_in_queue_ms`,
-  TMA = conversa + pós), pausas dos atendentes dessa fila, as 4 escalas-padrão e os feriados
-  (2024–2028). Escalas e feriados só completam o que falta: edições feitas aqui prevalecem.
-- **Não importado, de propósito**: salários, senhas, feedbacks de RH, atrasos e os dados de
-  AT/Fiscal/Folha. **Abandonos** também não: na base eles não indicam a fila (os sem área misturam
-  Ponto, Administrativo e Legal One). A base não tem ligações do Ponto em agosto/2026; a tela avisa
-  dias úteis sem nenhuma ligação.
-- **Vínculo GoTo ↔ Digisac**: pelo nome (mesmo primeiro nome e todas as partes do nome mais curto
-  no mais longo, sem acento: "Carlos Souza" = "Carlos Eduardo Lima Souza"). Os 6 técnicos foram
-  ligados automaticamente; corrija em Técnicos. O vínculo é aplicado na consulta (não exige reimportar).
-- **Dia útil**: segunda a sexta que não é feriado ativo. Feriado **facultativo** conta como útil.
-- **Disponibilidade**: sem lançamento = Presente (100%). Meio período = 50%; férias, folga, DayOff,
-  ausente = 0. Atestado, banco de horas e treinamento podem ser parciais: com horário, fração =
-  1 − horas ausentes ÷ jornada (padrão 7h12, como na Base Bruno; 1h30 → 79%). Um período (ex.:
-  férias) é lançado só nos dias úteis.
-- **Meta do dia** = meta do dia lançada na disponibilidade, ou meta vigente (Metas por período; senão a
-  meta padrão do técnico) × fração disponível. **Sem meta cadastrada, não há atingimento** (não
-  inventamos meta). Antes da data de admissão não há meta.
-- **Produção (realizado)** = chamados do Digisac **encerrados** no dia com mensagem do cliente
-  (departamentos monitorados) + ligações atendidas na fila do Ponto. (O Dashboard Geral continua
-  contando chamados pela data de **abertura**; por isso os números podem diferir.)
-- **Projeção** (Dashboard Gestão): realizado + ritmo médio dos dias úteis passados × dias úteis restantes.
-- **Alertas**: atingimento < 80% ou disponibilidade < 70% dos dias úteis (com 5+ dias úteis).
-- **Permissões/LGPD**: tudo que grava é da coordenação e vai para a auditoria. O técnico vê o próprio
-  dashboard e, no calendário, só as próprias ausências (a observação de atestado só a coordenação vê).
+- **Sincronização incremental** por `updatedAt`, com repetição em erro 429/5xx e renovação do token. A IA tem fila própria e nunca segura a sincronização.
+- **Mídias** (áudio, vídeo, imagem) continuam no Digisac: o servidor busca o link assinado na hora e repassa o conteúdo ao navegador, sem gravar arquivo.
+- **Interface** em HTML/CSS/JS puro, com [Chart.js](https://www.chartjs.org) e CSP restritiva.
 
-## Como cada indicador é calculado
+## 📏 Como os indicadores são calculados
 
-As regras estão em `src/indicadores.mjs` e cobertas por `test/regras.test.mjs`.
+As regras estão em `src/indicadores.mjs` e `src/gestao.mjs`, cobertas por `test/regras.test.mjs`.
+
+<details>
+<summary><b>💬 Chat (Digisac)</b></summary>
 
 - **Período**: pela data de **abertura** do chamado, em horário de Brasília.
-- **1ª resposta (TME)**: tempo que o cliente esperou por um humano. Começa na última mensagem do
-  robô (menu) antes do técnico — ou na 1ª mensagem do cliente, se não houve robô — e termina na
-  1ª mensagem de um técnico. Comentários internos, reações e mensagens do sistema não contam.
-  Contato ativo (técnico escreveu primeiro) e chamado sem resposta humana ficam vazios (não zero).
-  Validado em 29/10/2026: Suporte Resolutivo, outubro, 336 s aqui × 333 s no Digisac.
+- **1ª resposta (TME)**: tempo que o cliente esperou por um humano. Começa na última mensagem do robô (menu) antes do técnico, ou na 1ª mensagem do cliente se não houve robô, e termina na 1ª mensagem de um técnico. Comentários internos, reações e mensagens do sistema não contam. Contato ativo (o técnico escreveu primeiro) e chamado sem resposta humana ficam vazios, não zero.
 - **Duração (TMA)**: do início ao encerramento; só chamados encerrados.
-- **Técnico do chamado**: o `userId` atual do chamado no Digisac (quem estava com ele por último).
-  Transferências são contadas, mas o chamado não é rateado entre técnicos.
-- **CSAT**: média das notas 1–5 **dadas pelos clientes** na pesquisa do Digisac (`/answers`).
-  O `/answers` também traz notas que a IA do próprio Digisac gera sozinha (`aiGenerated: true`,
-  bem mais severas); elas ficam separadas (`origem = 'ia_digisac'`), aparecem como referência no
-  KPI e na conversa, mas **não entram no CSAT**. Notas inválidas (`-1`, `no_human_context`) são ignoradas.
-- **Sentimento, nota de qualidade e motivos**: só entram análises **aprovadas ou ajustadas** por
-  uma pessoa. Valores ajustados substituem os da IA. Pendentes aparecem à parte.
-- **Sinais de insatisfação**: análises da IA (pendentes ou revisadas, exceto descartadas) que
-  marcaram insatisfação — é uma fila de atenção, não um indicador de desempenho.
-- **Departamentos**: só os marcados em **Sincronização e conferência > Departamentos monitorados**
-  (vários; a escolha da tela prevalece sobre `DIGISAC_DEPARTAMENTOS` do .env). Os filtros do painel
-  também aceitam vários departamentos. `npm run departamentos` lista os do Digisac.
+- **Técnico do chamado**: quem estava com ele por último (`userId` no Digisac). Transferências são contadas, mas o chamado não é dividido entre técnicos.
+- **CSAT**: média das notas 1–5 **dadas pelos clientes**. O Digisac também gera notas pela IA dele (`aiGenerated`); elas aparecem só como referência e **não entram no CSAT**. Notas inválidas (`-1`, `no_human_context`) são ignoradas.
+- **Sentimento, qualidade e motivos**: só contam análises **aprovadas ou ajustadas** por uma pessoa.
+- **Departamentos**: só os marcados como monitorados. Os filtros aceitam vários.
+</details>
 
-### Validação contra o Digisac
+<details id="-voz-goto">
+<summary><b>📞 Voz (GoTo)</b></summary>
 
-Em **Sincronização e conferência > Conferir indicadores**, o sistema calcula os números locais e
-consulta `GET /api/v1/dashboard/general` no mesmo período, mostrando os dois lado a lado (cada
-conferência fica registrada). Divergência na contagem de chamados indica sincronização incompleta
-(rode a ressincronização). As **médias de tempo do Digisac dividem pelo total de chamados,
-inclusive os abertos** (verificado: Implantação, 81.875 s ÷ 48 = 1.706 s), por isso a duração média
-de lá é menor que a nossa, que considera só encerrados. Por chamado, a duração bate com
-`metrics.ticketTime`. A conferência consulta cada departamento monitorado e soma as contagens.
+- Importada da **Base Bruno** (`BASE_GOTO_PASTA`), o banco SQLite do sistema de gestão das outras áreas, que recebe as ligações da API da GoTo. O arquivo mais recente da pasta é aberto **só para leitura** e reimportado sozinho quando muda (ou `npm run importar-goto`).
+- **Importado**: ligações da fila `BASE_GOTO_FILA`, pausas dos atendentes dessa fila, escalas-padrão e feriados. Escalas e feriados só completam o que falta: edições feitas no painel prevalecem.
+- **Não importado, de propósito**: salários, senhas, feedbacks de RH e dados das outras áreas. Abandonos também ficam de fora, porque na base eles não indicam a fila.
+- **Espera (TME)** = tempo na fila; **TMA** = conversa + pós-atendimento; **nível de serviço** = atendidas em até 20 s.
+- **Vínculo GoTo ↔ Digisac** pelo nome, sem acento: mesmo primeiro nome e todas as partes do nome mais curto contidas no mais longo ("Carlos Souza" = "Carlos Eduardo Lima Souza"). Dá para corrigir em **Técnicos**.
+- A tela avisa quando há dias úteis sem nenhuma ligação na base.
+</details>
 
-## Inteligência Artificial
+<details>
+<summary><b>👥 Gestão da equipe</b></summary>
 
-`src/ia.mjs`. Para cada chamado **encerrado** com mensagens do cliente, envia a transcrição a um
-modelo e recebe JSON validado por esquema: sentimento, intensidade, insatisfação, motivos (lista
-fechada), nota 0–10, cinco critérios (cordialidade, clareza, resolução, agilidade, procedimento),
-resumo, pontos de melhoria, evidências literais e confiança. O prompt instrui a não penalizar o
-técnico por fatores fora do controle dele e a baixar a confiança em conversas curtas ou ambíguas.
+- **Dia útil**: segunda a sexta que não é feriado ativo. Feriado *facultativo* conta como útil.
+- **Disponibilidade**: sem lançamento = Presente (100%). Meio período = 50%; férias, folga, DayOff e ausente = 0. Atestado, banco de horas e treinamento podem ser parciais: fração = 1 − horas ausentes ÷ jornada (padrão 7h12; 1h30 → 79%). Um período (ex.: férias) é lançado só nos dias úteis.
+- **Meta do dia** = meta do dia lançada na disponibilidade, ou meta vigente (*Metas por período*, senão a meta padrão do técnico) × fração disponível. **Sem meta cadastrada não há atingimento**: o sistema não inventa meta.
+- **Realizado** = chamados do Digisac encerrados no dia + ligações atendidas na fila do Ponto.
+- **Projeção**: realizado + ritmo médio dos dias úteis passados × dias úteis restantes.
+- **Alertas**: atingimento < 80% ou disponibilidade < 70% dos dias úteis.
+- **Rankings**: CSAT só classifica quem tem 3+ respostas de clientes; quem tem função **Apoio** não entra (`FUNCOES_FORA_DO_RANKING`).
+</details>
 
-### Provedores (`IA_PROVEDOR`)
+<details>
+<summary><b>✅ Validação contra o Digisac</b></summary>
 
-- **`groq` (padrão, gratuito, na nuvem)**: [Groq](https://console.groq.com), API no formato
-  OpenAI, modelo aberto `openai/gpt-oss-120b`. Todo o processamento é lá: aqui é só uma chamada
-  HTTP, e cada análise leva segundos. A chamada sai do servidor do painel (a chave fica no
-  `.env`, nunca no navegador), então a análise automática funciona com o painel fechado.
-  Plano gratuito: ~1.000 pedidos e ~200 mil tokens por dia por organização (~3 mil tokens por
-  análise); ao bater o limite a fila para e retoma sozinha no ciclo seguinte. LGPD: os termos do
-  Groq proíbem treinar modelos com os dados enviados; ligue **Zero Data Retention** em
-  Settings > Data Controls. CPF, CNPJ, telefone e e-mail são mascarados antes do envio.
-  (O Gemini gratuito foi descartado: o Google declara usar os dados do plano gratuito.)
-- **Áudios e vídeos** (`src/transcricao.mjs`, `IA_TRANSCREVER_MIDIA=sim`): antes de cada análise,
-  as mensagens `ptt`/`audio`/`video` do chamado são transcritas pelo Whisper do Groq
-  (`whisper-large-v3-turbo`, português, plano gratuito: arquivos até 25 MB, ~8 h de áudio/dia).
-  O arquivo vem do Digisac (link assinado buscado na hora), passa só pela memória e não é gravado;
-  fica salvo apenas o texto, em `mensagens.transcricao` (apagado junto com a mensagem pela
-  retenção). A transcrição entra na conversa da IA como "(áudio transcrito)", já mascarada, e
-  aparece no balão da conversa como "Transcrição automática". Falha numa mídia não impede a
-  análise (o motivo fica em `transcricao_erro`). Imagens não são analisadas.
-  Medido: 3 áudios + 1 vídeo transcritos em 3,5 s.
-- **Ouvir/ver na conversa**: áudios e vídeos têm player no balão, imagens aparecem em miniatura
-  e documentos têm link para baixar (`GET /api/mensagens/:id/midia`). O arquivo continua no
-  Digisac: o servidor busca o link assinado na hora (guardado 5 min), repassa o conteúdo com
-  suporte a Range (avançar/voltar) e não grava nada. Mesmas permissões da conversa (técnico só
-  as suas) e registro `ver_midia` na auditoria. Nada é baixado antes do play (`preload="none"`,
-  imagens com `loading="lazy"`). Voz do WhatsApp (`audio/opus`) é entregue como `audio/ogg`.
-- **`ollama` (gratuito, open source, local)**: [Ollama](https://ollama.com) (MIT) rodando nesta
-  máquina, versão portátil em `.tools/ollama` (nada instalado no sistema), com o modelo
-  **Qwen3** (Apache 2.0). A conversa **não sai do computador**. Suba com `ia-local.cmd`
-  (porta 11434, só local) antes do painel. Modelos: `qwen3:14b` (padrão) ou `qwen3:8b`.
-  Neste notebook (i5-1335U, sem GPU) o gargalo é o processador: o 14B lê ~7 tokens/s e escreve
-  ~1,7 tokens/s. Por isso a conversa vai enxuta (sem `[ticket]`, reações e a nota da IA do
-  Digisac; menu do robô em uma linha; mensagens cortadas em 400 caracteres), a resposta tem
-  limite de tamanho, a janela de contexto é fixa em degraus (mudar a cada conversa recarrega o
-  modelo). `IA_THREADS` define quantos núcleos a IA usa: medido no 14B, 2 núcleos = leitura
-  5,0 / escrita 1,2 tokens/s; automático (6) = 6,2 / 1,6; 10 = 7,6 / 1,8. Em uso: 2, para não
-  pesar no computador.
-- **Automática ao fim de cada atendimento**: a sincronização roda a cada
-  `SINCRONIZAR_A_CADA_MINUTOS` (padrão 2; a consulta incremental leva ~1 s) e cada chamado recém
-  encerrado entra na fila da IA, na ordem de encerramento. **Sem retroativo**: só entram chamados
-  encerrados depois que a análise automática foi ligada (data gravada no banco em
-  `estado.ia_analisar_desde`). A IA tem fila própria, separada da sincronização (que não espera
-  por ela). "Analisar agora" na conversa fura a fila — serve também para um chamado antigo; a
-  tela mostra "na fila"/"analisando" e atualiza sozinha.
-  Em 15 conversas reais (out/2026) o 14B acertou 9 de 10 contra a nota do cliente, e o 8B 8 de 10.
-  CSAT 1 não serve de referência: há 29 notas 1 contra 2 notas 2, e a maioria é de cliente que
-  agradeceu e foi atendido (escala lida ao contrário).
-- **`anthropic`**: Claude (`claude-opus-5-5`), pago e na nuvem; precisa de `ANTHROPIC_API_KEY`.
-  Usa `fallbacks: "default"` (se o modelo recusar, a API tenta outro).
+Em **Sincronização e conferência › Conferir indicadores**, os números locais aparecem lado a lado com `GET /api/v1/dashboard/general` no mesmo período, e cada conferência fica registrada. Diferença na contagem de chamados indica sincronização incompleta. As médias de tempo do Digisac dividem pelo total de chamados, **inclusive os abertos**; por isso a duração média de lá é menor que a nossa, que considera só encerrados. Por chamado, a duração bate com `metrics.ticketTime`.
+</details>
 
-### Medindo a assertividade
+## 🤖 Inteligência Artificial
 
-- `npm run comparar-ia -- --modelos=qwen3:8b,qwen3:14b --n=10` roda os modelos nas mesmas conversas
-  reais (sem gravar análises) e compara com a **nota que o próprio cliente deu**: CSAT 1–2 deve gerar
-  insatisfação/negativo, CSAT 5 não. Gera `dados/comparacao-ia-AAAA-MM-DD.html`.
-- Na tela **Revisão da IA**, o placar por modelo mostra quanto a coordenação aprovou sem ajuste.
+Para cada chamado **encerrado**, a IA recebe a conversa (com os áudios e vídeos já transcritos) e devolve um JSON validado por esquema: sentimento, intensidade, insatisfação, motivos (lista fechada), nota 0–10, cinco critérios (cordialidade, clareza, resolução, agilidade, procedimento), resumo, pontos de melhoria, evidências literais e confiança. O prompt instrui a não penalizar o técnico por fatores fora do controle dele e a baixar a confiança em conversas curtas ou ambíguas.
 
-### Revisão humana e rastreabilidade
+| Provedor | Onde roda | Custo | Velocidade |
+|---|---|---|---|
+| **`groq`** (padrão) · `openai/gpt-oss-120b` + Whisper | nuvem | plano gratuito | ~2 s por análise |
+| `ollama` · Qwen3 8B/14B | este computador (portátil, em `.tools/`) | gratuito | minutos por análise sem placa de vídeo |
+| `anthropic` · Claude | nuvem | pago | segundos |
 
-- Toda análise nasce `pendente`. Ajustar ou descartar exige justificativa; tudo vai para a
-  auditoria com o valor anterior. Técnicos só veem avaliações já revisadas. Uma análise revisada
-  não é sobrescrita (é preciso reabrir a revisão).
-- Cada análise guarda modelo (`ollama/qwen3:14b`, `claude-opus-5-5`...), versão do prompt e data.
-- Falhas (JSON inválido, conversa longa demais, Ollama parado) ficam em `erros_ia` e são tentadas
-  de novo após 1 dia; a tela da conversa mostra o motivo.
+<details>
+<summary><b>Como funciona a análise automática</b></summary>
 
-## Segurança e LGPD
+- Cada chamado encerrado entra na fila da IA logo após a sincronização. **Sem retroativo**: só entram os encerrados depois que a análise automática foi ligada. "Analisar agora", na conversa, coloca o chamado na frente da fila, inclusive um antigo.
+- **Áudios e vídeos** são transcritos pelo Whisper (`whisper-large-v3-turbo`, português): o arquivo passa só pela memória e só o texto é salvo. A transcrição aparece no balão da conversa e entra na busca.
+- Ao atingir a cota gratuita, a fila pausa e retoma sozinha no ciclo seguinte. Uma chave inválida para a fila, em vez de marcar falha em cada chamado.
+- `npm run comparar-ia` compara modelos nas mesmas conversas reais contra a nota que o próprio cliente deu, sem gravar análises.
+</details>
 
-- **Acesso**: login próprio (scrypt), sessão em cookie `HttpOnly; SameSite=Strict`, bloqueio após 5
-  senhas erradas em 15 min, senha mínima de 10 caracteres. Por padrão o servidor só escuta em
-  `127.0.0.1`; para abrir na rede interna use `HOST=0.0.0.0` (e de preferência um proxy com HTTPS).
-- **Perfis**: administrador, coordenação, técnico (vê só os próprios atendimentos).
-- **Auditoria**: login (inclusive falhas), abertura de cada conversa, revisões da IA, exportações,
-  conferências, sincronizações manuais e alterações de usuários (tela Auditoria).
-- **Minimização para a IA**: antes de enviar, CPF, CNPJ, telefones e e-mails são mascarados
-  (`mascarar()` em `src/ia.mjs`) e o nome do cliente não é enviado — só os papéis
-  (CLIENTE/TÉCNICO/ROBÔ). Pela política comercial da Anthropic, dados da API não são usados para
-  treinar modelos; confirme o enquadramento com o encarregado de dados (DPO) da Tek Norte.
-- **Retenção**: o texto das conversas é apagado do banco local após `RETENCAO_MENSAGENS_DIAS`;
-  métricas e análises permanecem.
-- **Segredos** ficam só no `.env` (fora do versionamento). Cabeçalhos CSP, `X-Frame-Options` e
-  `nosniff` em todas as respostas.
+<details>
+<summary><b>Revisão humana e rastreabilidade</b></summary>
 
-## Integração Digisac
+- Toda análise nasce **pendente**. Ajustar ou descartar exige justificativa; tudo vai para a auditoria com o valor anterior. Uma análise revisada não é sobrescrita (é preciso reabrir a revisão).
+- Técnicos só veem avaliações já revisadas.
+- Cada análise guarda o modelo, a versão do prompt e a data. O placar por modelo, em **Revisão da IA**, mostra quanto a coordenação aprovou sem ajuste.
+- Falhas ficam registradas com o motivo e são tentadas de novo após 1 dia.
+</details>
 
-Referência: <https://documenter.getpostman.com/view/24605757/2sA3BhfaDg>. Cliente em `src/digisac.mjs`.
+## 🔒 Segurança e LGPD
+
+- **Acesso**: senha com hash scrypt, sessão em cookie `HttpOnly; SameSite=Strict`, bloqueio após 5 senhas erradas em 15 min. Por padrão o servidor só escuta em `127.0.0.1`.
+- **Perfis e escopo**: o técnico vê só o que é dele; a observação de um atestado só a coordenação vê.
+- **Auditoria**: logins (inclusive falhas), abertura de cada conversa e de cada mídia, revisões da IA, exportações, conferências e qualquer alteração de cadastro, meta, escala, disponibilidade ou feriado.
+- **Minimização para a IA**: CPF, CNPJ, telefones e e-mails são mascarados antes do envio (inclusive o que foi falado nos áudios), e o nome do cliente não é enviado. No Groq, ligue **Zero Data Retention** (Settings › Data Controls); os termos proíbem treinar modelos com os dados enviados.
+- **Retenção**: o texto das conversas e as transcrições são apagados após `RETENCAO_MENSAGENS_DIAS`; métricas e análises permanecem.
+- **Segredos** ficam só no `.env`, fora do versionamento. CSP, `X-Frame-Options` e `nosniff` em todas as respostas.
+
+<details>
+<summary><b>🔌 Endpoints do Digisac usados</b></summary>
+
+Referência: <https://documenter.getpostman.com/view/24605757/2sA3BhfaDg> · cliente em `src/digisac.mjs`.
 
 | Uso | Endpoint |
 |---|---|
-| Autenticação | token pessoal (Bearer) ou `POST /api/v1/oauth/token` (grant `password`) |
+| Autenticação | token pessoal (Bearer) ou `POST /api/v1/oauth/token` |
 | Técnicos / departamentos | `GET /api/v1/users`, `GET /api/v1/departments` |
-| Chamados (incremental por `updatedAt`) | `GET /api/v1/tickets?query={where, include: contact, ticketTopics, ticketTransfers}` |
-| Mensagens | `GET /api/v1/messages?query={where: {ticketId}}` |
-| Pesquisa de satisfação | `GET /api/v1/answers` |
+| Chamados (incremental) | `GET /api/v1/tickets?query={where, include}` |
+| Mensagens e mídias | `GET /api/v1/messages?query={where: {ticketId}, include: [file]}` |
+| Pesquisa de satisfação | `GET /api/v1/answers`, `GET /api/v1/questions` |
 | Conferência | `GET /api/v1/dashboard/general` |
+</details>
 
-Listagens usam `?query=` (JSON estilo Sequelize) com `page`/`perPage`; o cliente aceita resposta
-`{data, lastPage}` ou array, repete em 429/5xx com espera e renova o token OAuth em 401.
-
-**A documentação do Digisac não traz exemplos de resposta.** Os campos usados
-(`isFromMe`, `isFromBot`, `isComment`, `userId`, `startedAt`, `endedAt`, `ticketTopics`, e o valor da
-nota em `/answers`) foram inferidos das consultas da própria coleção. Na primeira sincronização real,
-confira na tela de uma conversa se cliente/técnico/robô aparecem nos lugares certos e se as notas de
-CSAT batem com o Digisac. O JSON original de cada chamado fica em `chamados.bruto` para ajustes.
-
-## Estrutura
+## 🗂️ Estrutura do projeto
 
 ```
-src/config.mjs       .env e padrões
-src/db.mjs           esquema SQLite, auditoria
-src/digisac.mjs      cliente da API Digisac
-src/sync.mjs         sincronização incremental, retenção
-src/indicadores.mjs  regras de cálculo e agregações
-src/ia.mjs           análise com Claude, mascaramento LGPD
-src/auth.mjs         senhas, sessões, perfis
-src/server.mjs       API HTTP + arquivos da interface
-src/usuario.mjs      cria/redefine usuário pela linha de comando
-src/demo.mjs         dados fictícios
-web/                 interface (HTML/CSS/JS sem framework)
+src/
+  server.mjs         API HTTP, permissões, arquivos da interface
+  rotas-gestao.mjs   rotas de dashboards, rankings, voz e equipe
+  sync.mjs           sincronização incremental com o Digisac, retenção
+  digisac.mjs        cliente da API do Digisac
+  base-goto.mjs      importador da Base Bruno (ligações da GoTo)
+  indicadores.mjs    regras dos indicadores de chat
+  gestao.mjs         dias úteis, disponibilidade, metas, produção, voz
+  ia.mjs             fila e análise da IA, mascaramento LGPD
+  transcricao.mjs    transcrição de áudio/vídeo (Whisper)
+  auth.mjs           senhas, sessões, perfis
+  db.mjs             esquema SQLite e auditoria
+  demo.mjs           dados fictícios
+web/                 interface (HTML, CSS e JS sem framework)
 test/                testes (node --test)
+docs/img/            capturas de tela (dados fictícios)
 ```
+
+## 🧪 Testes e comandos
+
+| Comando | O que faz |
+|---|---|
+| `npm start` | sobe o painel em `http://localhost:4250` |
+| `npm test` | roda os 19 testes das regras (indicadores, IA, LGPD, gestão) |
+| `npm run usuario -- --admin` | cria ou redefine um usuário |
+| `npm run sincronizar` / `sincronizar:completo` | sincroniza com o Digisac pelo terminal |
+| `npm run importar-goto` | importa a base da GoTo agora |
+| `npm run analisar` | processa a fila da IA |
+| `npm run comparar-ia` | compara modelos de IA em conversas reais |
+| `npm run departamentos` | lista os departamentos do Digisac |
+| `npm run demo` / `npm run demo -- --limpar` | gera ou remove os dados de demonstração |
+
+---
+
+<div align="center">
+<sub>Feito para a equipe de Suporte de Ponto Eletrônico da <b>Tek Norte</b>.</sub>
+</div>

@@ -12,6 +12,9 @@ function limpar() {
       db.prepare(`DELETE FROM ${t} WHERE chamado_id LIKE 'demo-%'`).run();
     }
     db.prepare("DELETE FROM chamados WHERE id LIKE 'demo-%'").run();
+    // Metas, escalas e disponibilidade saem em cascata com os técnicos; voz não tem vínculo direto.
+    db.prepare("DELETE FROM ligacoes WHERE id LIKE 'demo-%'").run();
+    db.prepare("DELETE FROM pausas WHERE agente LIKE '% (GoTo demo)'").run();
     db.prepare("DELETE FROM contatos WHERE id LIKE 'demo-%'").run();
     db.prepare("DELETE FROM tecnicos WHERE id LIKE 'demo-%'").run();
     db.prepare("DELETE FROM departamentos WHERE id LIKE 'demo-%'").run();
@@ -103,7 +106,7 @@ transacao(() => {
 
       if (!aberto && aleatorio() < 0.45) {
         const nota = tipo === 'boa' ? Math.round(entre(4, 5)) : tipo === 'neutra' ? Math.round(entre(3, 5)) : Math.round(entre(1, 2));
-        db.prepare('INSERT OR REPLACE INTO avaliacoes (id, chamado_id, tecnico_id, tipo, nota, respondido_em) VALUES (?, ?, ?, ?, ?, ?)')
+        db.prepare("INSERT OR REPLACE INTO avaliacoes (id, chamado_id, tecnico_id, tipo, nota, respondido_em, origem) VALUES (?, ?, ?, ?, ?, ?, 'cliente')")
           .run(`demo-a${n}`, `demo-${n}`, tecId, 'csat', nota, fim);
       }
       if (!aberto && aleatorio() < 0.7) {
@@ -128,6 +131,52 @@ transacao(() => {
     }
   }
   console.log(`${n} chamados fictícios gerados.`);
+
+  // Gestão e voz fictícias: equipe, escalas, metas, ausências, ligações e pausas da GoTo.
+  const FUNCOES = ['Técnico', 'Técnico', 'Técnico', 'Técnico', 'Apoio Gestão'];
+  TECNICOS.forEach(([id, nome], i) => db.prepare("UPDATE tecnicos SET na_equipe = 1, situacao = 'Ativo', funcao = ?, goto_agente = ? WHERE id = ?")
+    .run(FUNCOES[i], `${nome} (GoTo demo)`, id));
+  if (!db.prepare('SELECT COUNT(*) n FROM escalas').get().n) {
+    for (const [nome, ini, fim] of [['Escala 1', '08:00', '16:42'], ['Escala 2', '08:30', '17:12'], ['Escala 3', '09:00', '17:42'], ['Escala 4', '09:30', '18:12']]) {
+      db.prepare('INSERT INTO escalas (nome, hora_inicio, hora_fim) VALUES (?, ?, ?)').run(nome, ini, fim);
+    }
+  }
+  const escalas = db.prepare('SELECT id FROM escalas ORDER BY hora_inicio').all().map((e) => e.id);
+  const diaIso = (atras) => new Date(hoje - atras * 86400_000 - 3 * 3600_000).toISOString().slice(0, 10);
+  TECNICOS.forEach(([id], i) => {
+    db.prepare('INSERT OR REPLACE INTO tecnico_escalas (tecnico_id, escala_id, desde, motivo) VALUES (?, ?, ?, ?)').run(id, escalas[i % escalas.length], diaIso(60), 'Demonstração');
+    db.prepare('INSERT OR REPLACE INTO metas_periodo (tecnico_id, desde, meta, observacao) VALUES (?, ?, ?, ?)').run(id, diaIso(60), [6, 5, 6, 5, 4][i], 'Demonstração');
+  });
+  const ausencia = (id, atras, status, fracao, extra = {}) => db.prepare(`INSERT OR REPLACE INTO disponibilidade
+    (tecnico_id, dia, status, fracao, hora_inicio_ausencia, hora_fim_ausencia, observacao) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .run(id, diaIso(atras), status, fracao, extra.inicio ?? null, extra.fim ?? null, extra.obs ?? null);
+  for (let d = 22; d >= 18; d--) ausencia('demo-t5', d, 'Férias', 0);
+  ausencia('demo-t4', 9, 'Atestado', 0.7917, { inicio: '09:00', fim: '10:30', obs: 'Consulta (demonstração)' });
+  ausencia('demo-t2', 4, 'Folga', 0);
+  ausencia('demo-t3', 2, 'Treinamento', 0.5, { inicio: '13:00', fim: '16:36' });
+
+  let nLig = 0;
+  for (let dia = 60; dia >= 0; dia--) {
+    const data = new Date(hoje - dia * 86400_000);
+    if ([0, 6].includes(data.getDay())) continue;
+    for (const [id, nome, qualidade] of TECNICOS) {
+      if (db.prepare('SELECT 1 FROM disponibilidade WHERE tecnico_id = ? AND dia = ? AND fracao = 0').get(id, diaIso(dia))) continue;
+      const agente = `${nome} (GoTo demo)`;
+      for (let k = Math.round(entre(1, 6) * qualidade); k > 0; k--) {
+        const inicio = new Date(data);
+        inicio.setUTCHours(Math.round(entre(8, 17)) + 3, Math.floor(entre(0, 59)), 0, 0);
+        const espera = aleatorio() < 0.85 ? entre(2, 20) : entre(20, 180);
+        const conversa = entre(30, aleatorio() < 0.8 ? 420 : 1500);
+        db.prepare(`INSERT OR REPLACE INTO ligacoes (id, fila, agente, inicio, dia, hora, espera_seg, conversa_seg, pos_seg, total_seg, resultado)
+          VALUES (?, 'Ponto Eletrônico', ?, ?, ?, ?, ?, ?, 12, ?, 'COMPLETED')`)
+          .run(`demo-l${++nLig}`, agente, inicio.toISOString(), diaIso(dia), inicio.getUTCHours() - 3, Math.round(espera), Math.round(conversa), Math.round(conversa) + 12);
+      }
+      db.prepare('INSERT INTO pausas (agente, dia, motivo, duracao_seg, quantidade) VALUES (?, ?, ?, ?, ?)').run(agente, diaIso(dia), 'Pausa Obrigatoria - 10 Minutos', 1200, 2);
+      if (aleatorio() < 0.5) db.prepare('INSERT INTO pausas (agente, dia, motivo, duracao_seg, quantidade) VALUES (?, ?, ?, ?, ?)').run(agente, diaIso(dia), 'Agua / Cafe / Toilet', Math.round(entre(120, 600)), 1);
+      if (aleatorio() < 0.1) db.prepare('INSERT INTO pausas (agente, dia, motivo, duracao_seg, quantidade) VALUES (?, ?, ?, ?, ?)').run(agente, diaIso(dia), 'Reuniao', 1800, 1);
+    }
+  }
+  console.log(`${nLig} ligações fictícias geradas (fila Ponto Eletrônico).`);
 });
 
 gravarEstado('demonstracao', 'sim');
