@@ -1,0 +1,25 @@
+{
+  "name": "tek-ponto-gestao",
+  "version": "1.0.0",
+  "description": "Tek Ponto - Suporte Gestão: indicadores, conversas e análise de qualidade por IA dos atendimentos Digisac do Suporte de Ponto Eletrônico",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node src/server.mjs",
+    "sincronizar": "node src/sync.mjs",
+    "sincronizar:completo": "node src/sync.mjs --completo",
+    "analisar": "node src/ia.mjs",
+    "demo": "node src/demo.mjs",
+    "departamentos": "node src/departamentos.mjs",
+    "comparar-ia": "node src/comparar-ia.mjs",
+    "usuario": "node src/usuario.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
+    "chart.js": "^4.4.1"
+  }
+}

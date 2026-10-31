@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tek Ponto - Suporte Gestão</title>
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <script src="vendor/chart.umd.js" defer></script>
+  <script src="app.js" type="module"></script>
+</head>
+<body>
+  <div id="login" class="login" hidden>
+    <form id="form-login" class="login-cartao">
+      <div class="marca marca-grande"><img src="logo.svg" alt=""><div><strong>Tek Ponto</strong><span>Suporte Gestão</span></div></div>
+      <label>E-mail<input name="email" type="email" autocomplete="username" required></label>
+      <label>Senha<input name="senha" type="password" autocomplete="current-password" required></label>
+      <p class="erro" id="erro-login" role="alert"></p>
+      <button class="botao primario" type="submit">Entrar</button>
+      <p class="rodape-login">Acesso restrito à equipe Tek Norte. Os acessos às conversas são registrados.</p>
+    </form>
+  </div>
+
+  <div id="app" class="app" hidden>
+    <aside class="lateral">
+      <div class="marca"><img src="logo.svg" alt=""><div><strong>Tek Ponto</strong><span>Suporte Gestão</span></div></div>
+      <nav id="menu">
+        <span class="menu-grupo">Dashboards</span>
+        <a href="#/painel" data-pagina="painel">Dashboard Geral</a>
+        <a href="#/dash-tecnicos" data-pagina="dash-tecnicos" data-perfil="gestor">Dashboard Técnicos</a>
+        <a href="#/individual" data-pagina="individual">Dashboard Individual</a>
+        <a href="#/gestao" data-pagina="gestao" data-perfil="gestor">Dashboard Gestão</a>
+        <a href="#/rankings" data-pagina="rankings" data-perfil="gestor">Rankings</a>
+        <span class="menu-grupo">Atendimento</span>
+        <a href="#/conversas" data-pagina="conversas">Conversas</a>
+        <a href="#/voz" data-pagina="voz" data-perfil="gestor">GoTo / Voz</a>
+        <a href="#/chamadas-voz" data-pagina="chamadas-voz" data-perfil="gestor">Análise de chamadas</a>
+        <a href="#/revisao" data-pagina="revisao" data-perfil="gestor">Revisão da IA <span class="contador" id="contador-revisao" hidden></span></a>
+        <span class="menu-grupo">Equipe</span>
+        <a href="#/equipe" data-pagina="equipe" data-perfil="gestor">Técnicos</a>
+        <a href="#/disponibilidade" data-pagina="disponibilidade" data-perfil="gestor">Disponibilidade</a>
+        <a href="#/calendario" data-pagina="calendario">Calendário</a>
+        <a href="#/escalas" data-pagina="escalas" data-perfil="gestor">Escalas</a>
+        <a href="#/metas" data-pagina="metas" data-perfil="gestor">Metas por período</a>
+        <a href="#/feriados" data-pagina="feriados" data-perfil="gestor">Feriados</a>
+        <span class="menu-grupo" data-perfil="gestor">Sistema</span>
+        <a href="#/sincronizacao" data-pagina="sincronizacao" data-perfil="gestor">Sincronização e conferência</a>
+        <a href="#/usuarios" data-pagina="usuarios" data-perfil="admin">Usuários</a>
+        <a href="#/auditoria" data-pagina="auditoria" data-perfil="admin">Auditoria</a>
+      </nav>
+      <div class="lateral-rodape">
+        <div id="estado-sync" class="estado-sync"></div>
+        <div class="quem"><span id="nome-usuario"></span><button class="link" id="botao-senha">Trocar senha</button> · <button class="link" id="botao-sair">Sair</button></div>
+      </div>
+    </aside>
+    <main>
+      <div id="faixa-demo" class="faixa-demo" hidden>Modo demonstração: os dados exibidos são fictícios. Remova com <code>npm run demo -- --limpar</code> antes de usar com o Digisac.</div>
+      <div id="pagina"></div>
+    </main>
+  </div>
+
+  <dialog id="dialogo"><form method="dialog" id="dialogo-form"></form></dialog>
+</body>
+</html>
